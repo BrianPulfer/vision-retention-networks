@@ -1,5 +1,6 @@
 # Custom folders
 checkpoints/
+.ruff_cache/
 wandb/
 
 # Byte-compiled / optimized / DLL files
