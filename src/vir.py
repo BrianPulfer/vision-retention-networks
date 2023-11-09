@@ -4,13 +4,19 @@ import torch.nn as nn
 DEFAULT_ALPHA = 1.00
 
 
+class ViRModes:
+    PARALLEL = "parallel"
+    RECURRENT = "recurrent"
+    CHUNKWISE_PARALLEL = "chunkwise_parallel"
+
+
 class Retention(nn.Module):
-    def __init__(self, embed_dim, max_len, alpha=DEFAULT_ALPHA, parallel=True):
+    def __init__(self, embed_dim, max_len, alpha=DEFAULT_ALPHA, mode=ViRModes.PARALLEL):
         super(Retention, self).__init__()
         self.dim = embed_dim
         self.max_len = max_len
         self.alpha = alpha
-        self.parallel = parallel
+        self.mode = mode
 
         # Useful buffers
         self.register_buffer("dim_sqrt", torch.tensor(embed_dim**0.5))
@@ -40,21 +46,27 @@ class Retention(nn.Module):
         # TODO: ...
         pass
 
-    def forward(self, x, parallel=None):
-        if parallel is None:
-            parallel = self.parallel
+    def forward_chunkwise_parallel(self, x):
+        # TODO: ...
+        pass
 
-        if parallel:
+    def forward(self, x, mode=ViRModes.PARALLEL):
+        if mode is None:
+            mode = self.mode
+
+        if mode == ViRModes.PARALLEL:
             return self.forward_parallel(x)
-        else:
+        elif mode == ViRModes.RECURRENT:
             return self.forward_recurrent(x)
 
 
 class MultiHeadRetention(nn.Module):
-    def __init__(self, heads, embed_dim, max_len, alpha=DEFAULT_ALPHA, parallel=True):
+    def __init__(
+        self, heads, embed_dim, max_len, alpha=DEFAULT_ALPHA, mode=ViRModes.PARALLEL
+    ):
         super(MultiHeadRetention, self).__init__()
         self.heads = heads
-        self.parallel = parallel
+        self.mode = mode
 
         self.heads = nn.ModuleList(
             [Retention(embed_dim, max_len, alpha) for _ in range(heads)]
@@ -63,11 +75,11 @@ class MultiHeadRetention(nn.Module):
         self.gelu = nn.GELU()
         self.linear = nn.Linear(embed_dim * heads, embed_dim)
 
-    def forward(self, x, parallel=None):
-        if parallel is None:
-            parallel = self.parallel
+    def forward(self, x, mode=None):
+        if mode is None:
+            mode = self.mode
 
-        out = torch.cat([head(x, parallel) for head in self.heads], dim=-1)
+        out = torch.cat([head(x, mode) for head in self.heads], dim=-1)
         return self.linear(self.gelu(self.ln(out)))
 
 
@@ -88,20 +100,29 @@ class MLP(nn.Module):
 
 class ViRBlock(nn.Module):
     def __init__(
-        self, heads, embed_dim, max_len, alpha=DEFAULT_ALPHA, parallel=True, dropout=0.1
+        self,
+        heads,
+        embed_dim,
+        max_len,
+        alpha=DEFAULT_ALPHA,
+        mode=ViRModes.PARALLEL,
+        dropout=0.1,
     ):
         super(ViRBlock, self).__init__()
-        self.parallel = parallel
+        self.mode = mode
 
         self.ln1 = nn.LayerNorm(embed_dim)
-        self.retention = MultiHeadRetention(heads, embed_dim, max_len, alpha, parallel)
+        self.retention = MultiHeadRetention(heads, embed_dim, max_len, alpha, mode)
         self.ln2 = nn.LayerNorm(embed_dim)
         self.mlp = MLP(embed_dim)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, x, parallel=None):
-        x = self.dropout1(self.retention(self.ln1(x), parallel=parallel)) + x
+    def forward(self, x, mode=None):
+        if mode is None:
+            mode = self.mode
+
+        x = self.dropout1(self.retention(self.ln1(x), mode=mode)) + x
         x = self.dropout2(self.mlp(self.ln2(x))) + x
         return x
 
@@ -116,7 +137,7 @@ class ViR(nn.Module):
         embed_dim=768,
         max_len=257,
         alpha=DEFAULT_ALPHA,
-        parallel=True,
+        mode=ViRModes.PARALLEL,
         dropout=0.1,
     ):
         super(ViR, self).__init__()
@@ -129,7 +150,7 @@ class ViR(nn.Module):
         self.embed_dim = embed_dim
         self.max_len = max_len
         self.alpha = alpha
-        self.parallel = parallel
+        self.mode = mode
 
         # Embeddings
         self.patch_embed = nn.Conv2d(
@@ -141,7 +162,7 @@ class ViR(nn.Module):
         # ViR blocks
         self.blocks = nn.ModuleList(
             [
-                ViRBlock(heads, embed_dim, max_len, alpha, parallel, dropout)
+                ViRBlock(heads, embed_dim, max_len, alpha, mode, dropout)
                 for _ in range(depth)
             ]
         )
@@ -150,9 +171,12 @@ class ViR(nn.Module):
         self.ln = nn.LayerNorm(embed_dim)
         self.linear = nn.Linear(embed_dim, out_dim)
 
-    def forward(self, x, parallel=None):
-        if parallel is None:
-            parallel = self.parallel
+    def set_compute_mode(self, mode):
+        self.mode = mode
+
+    def forward(self, x, mode=None):
+        if mode is None:
+            mode = self.mode
 
         # Patch embedding, positional embedding, CLS token
         x = self.patch_embed(x).permute(0, 2, 3, 1).flatten(1, 2)

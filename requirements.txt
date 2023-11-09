@@ -1,2 +1,5 @@
+datasets==2.14.6
 pytorch_lightning==2.1.1
 torch==2.1.0
+torchvision==0.16.0
+wandb==0.16.0
