@@ -46,10 +46,6 @@ class Retention(nn.Module):
         # TODO: ...
         pass
 
-    def forward_chunkwise_parallel(self, x):
-        # TODO: ...
-        pass
-
     def forward(self, x, mode=ViRModes.PARALLEL):
         if mode is None:
             mode = self.mode
@@ -66,20 +62,32 @@ class MultiHeadRetention(nn.Module):
     ):
         super(MultiHeadRetention, self).__init__()
         self.heads = heads
+        self.embed_dim = embed_dim
+        self.head_dim = embed_dim // heads
         self.mode = mode
 
+        assert (
+            embed_dim % heads == 0
+        ), "Embedding dimension must be divisible by the number of heads"
+
         self.heads = nn.ModuleList(
-            [Retention(embed_dim, max_len, alpha) for _ in range(heads)]
+            [Retention(embed_dim // heads, max_len, alpha) for _ in range(heads)]
         )
-        self.ln = nn.LayerNorm(embed_dim * heads)
+        self.ln = nn.LayerNorm(embed_dim)
         self.gelu = nn.GELU()
-        self.linear = nn.Linear(embed_dim * heads, embed_dim)
+        self.linear = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x, mode=None):
         if mode is None:
             mode = self.mode
 
-        out = torch.cat([head(x, mode) for head in self.heads], dim=-1)
+        out = torch.cat(
+            [
+                head(x[:, :, i * self.head_dim : (i + 1) * self.head_dim], mode)
+                for i, head in enumerate(self.heads)
+            ],
+            dim=-1,
+        )
         return self.linear(self.gelu(self.ln(out)))
 
 

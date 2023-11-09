@@ -146,8 +146,8 @@ def main(args):
     )
     trainer.fit(model, train_loader)
 
-    # Evaluate model
-    model.set_compute_mode(ViRModes.SEQUENTIAL)
+    # Evaluate model (setting to recurrent mode)
+    model.model.set_compute_mode(ViRModes.RECURRENT)
     trainer.test(model, val_loader)
 
 
