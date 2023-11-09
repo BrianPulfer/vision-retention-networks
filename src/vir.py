@@ -42,18 +42,24 @@ class Retention(nn.Module):
         out = (q @ k.transpose(-1, -2) / self.dim_sqrt * M) @ v
         return out
 
-    def forward_recurrent(self, x):
-        # TODO: ...
-        pass
+    def forward_recurrent(self, x, state):
+        assert x.ndim == 2, "Recurrent mode only works with 2D inputs"
 
-    def forward(self, x, mode=ViRModes.PARALLEL):
+        q, k, v = self.qkv(x).chunk(3, dim=-1)
+
+        new_state = self.alpha * state + k.unsqueeze(-1) @ v.unsqueeze(1)
+        out = q.unsqueeze(1) @ new_state / self.dim_sqrt
+
+        return out.squeeze(), new_state
+
+    def forward(self, x, state=None, mode=ViRModes.PARALLEL):
         if mode is None:
             mode = self.mode
 
         if mode == ViRModes.PARALLEL:
             return self.forward_parallel(x)
         elif mode == ViRModes.RECURRENT:
-            return self.forward_recurrent(x)
+            return self.forward_recurrent(x, state)
 
 
 class MultiHeadRetention(nn.Module):
@@ -61,7 +67,7 @@ class MultiHeadRetention(nn.Module):
         self, heads, embed_dim, max_len, alpha=DEFAULT_ALPHA, mode=ViRModes.PARALLEL
     ):
         super(MultiHeadRetention, self).__init__()
-        self.heads = heads
+        self.n_heads = heads
         self.embed_dim = embed_dim
         self.head_dim = embed_dim // heads
         self.mode = mode
@@ -81,14 +87,48 @@ class MultiHeadRetention(nn.Module):
         if mode is None:
             mode = self.mode
 
+        if mode == ViRModes.PARALLEL:
+            return self.forward_parallel(x)
+        elif mode == ViRModes.RECURRENT:
+            return self.forward_recurrent(x)
+
+    def forward_parallel(self, x):
         out = torch.cat(
             [
-                head(x[:, :, i * self.head_dim : (i + 1) * self.head_dim], mode)
+                head(
+                    x[:, :, i * self.head_dim : (i + 1) * self.head_dim],
+                    mode=ViRModes.PARALLEL,
+                )
                 for i, head in enumerate(self.heads)
             ],
             dim=-1,
         )
         return self.linear(self.gelu(self.ln(out)))
+
+    def forward_recurrent(self, x):
+        """Given a B, L, D input, returns a B, D output (last token output)"""
+        batch_size, length, dim = x.shape
+
+        all_outputs = []
+        state = [
+            torch.zeros(batch_size, dim // self.n_heads, dim // self.n_heads).cuda()
+            for _ in range(self.n_heads)
+        ]
+        for i in range(length):
+            outs_and_states = [
+                head(
+                    x[:, i, j * self.head_dim : (j + 1) * self.head_dim],
+                    state[j],
+                    mode=ViRModes.RECURRENT,
+                )
+                for j, head in enumerate(self.heads)
+            ]
+
+            all_outputs.append(torch.cat([out for out, _ in outs_and_states], dim=1))
+            state = [new_state for _, new_state in outs_and_states]
+
+        x = torch.stack(all_outputs, dim=1)
+        return self.linear(self.gelu(self.ln(x)))
 
 
 class MLP(nn.Module):
@@ -196,9 +236,28 @@ class ViR(nn.Module):
 
         # Blocks
         for block in self.blocks:
-            x = block(x)
+            x = block(x, mode=mode)
 
         # Head on the CLS token
         x = self.linear(self.ln(x[:, -1]))
 
         return x
+
+
+if __name__ == "__main__":
+    # Testing that parallel and recurrent modes give the same output
+
+    model = ViR(depth=12, heads=3, embed_dim=192).eval().cuda()
+    x = torch.randn(16, 3, 224, 224).cuda()
+
+    with torch.no_grad():
+        model.set_compute_mode(ViRModes.PARALLEL)
+        y1 = model(x)
+
+        model.set_compute_mode(ViRModes.RECURRENT)
+        y2 = model(x)
+
+        assert torch.allclose(
+            y1, y2, atol=1e-6
+        ), "Parallel and recurrent modes should give the same output"
+    print("Test passed! (parallel and recurrent modes give the same output)")
