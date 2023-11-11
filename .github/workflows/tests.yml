@@ -24,10 +24,14 @@ jobs:
           auto-update-conda: true
 
       - name: Activate Conda environment
-        run: source /usr/share/miniconda/etc/profile.d/conda.sh && conda activate vir
+        run: source activate vir
 
       - name: Install dependencies
-        run: conda install --yes --file requirements.txt
+        run: |
+          conda install --yes --file requirements.txt
+          pip install -r requirements.txt
 
       - name: Run pytest
-        run: PYTHONPATH=src/ pytest tests/
+        run: pytest tests/
+        env:
+          PYTHONPATH: src/
