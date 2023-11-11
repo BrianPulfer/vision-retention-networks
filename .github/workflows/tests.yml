@@ -16,17 +16,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Set-up conda environment
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          python-version: 3.11.5
-          environment-file: environment.yml
-          auto-update-conda: true
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run pytest
-        run: conda run -n vir pytest tests/
+        run: pytest tests/
         env:
           PYTHONPATH: src/
