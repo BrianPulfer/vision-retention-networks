@@ -46,7 +46,7 @@ class Retention(nn.Module):
         batch_size, length, dim = x.shape
 
         all_outputs = []
-        state = torch.zeros(batch_size, dim, dim).cuda()
+        state = torch.zeros(batch_size, dim, dim).to(x.device)
         for i in range(length):
             xi = x[:, i]
             q, k, v = self.qkv(xi).chunk(3, dim=-1)
