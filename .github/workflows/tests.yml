@@ -4,9 +4,11 @@ on:
     push:
         branches:
         - main
+        - actions
     pull_request:
         branches:
         - main
+        - actions
 jobs:
   clone-and-test:
     runs-on: ubuntu-latest
@@ -23,5 +25,5 @@ jobs:
 
       - name: PyTest
         run: |
-          conda activate vir
+          source activate vir
           PYTHONPATH=src/ pytest tests/
