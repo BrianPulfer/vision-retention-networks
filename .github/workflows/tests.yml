@@ -1,14 +1,14 @@
 name: "Tests"
 run-name: 'Tests 🧪'
 on:
-    push:
-        branches:
-        - main
-        - actions
-    pull_request:
-        branches:
-        - main
-        - actions
+  push:
+    branches:
+      - main
+      - actions
+  pull_request:
+    branches:
+      - main
+      - actions
 jobs:
   clone-and-test:
     runs-on: ubuntu-latest
@@ -24,7 +24,7 @@ jobs:
           auto-update-conda: true
 
       - name: Activate Conda environment
-        run: source activate vir
+        run: conda activate vir
 
       - name: Install dependencies
         run: |
