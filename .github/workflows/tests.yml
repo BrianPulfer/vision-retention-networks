@@ -24,9 +24,9 @@ jobs:
           auto-update-conda: true
 
       - name: Install dependencies
-        run: conda install --yes --file requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run pytest
-        run: conda run --no-capture-output pytest tests/
+        run: conda run pytest tests/
         env:
           PYTHONPATH: src/
