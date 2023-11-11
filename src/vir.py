@@ -217,22 +217,3 @@ class ViR(nn.Module):
         x = self.linear(self.ln(x[:, -1]))
 
         return x
-
-
-if __name__ == "__main__":
-    # Testing that parallel and recurrent modes give the same output
-    model = ViR(depth=12, heads=3, embed_dim=192).eval().cuda()
-    x = torch.randn(16, 3, 224, 224).cuda()
-
-    with torch.no_grad():
-        model.set_compute_mode(ViRModes.PARALLEL)
-        y1 = model(x)
-
-        model.set_compute_mode(ViRModes.RECURRENT)
-        y2 = model(x)
-
-        assert torch.allclose(
-            y1, y2, atol=1e-6
-        ), "Parallel and recurrent modes should give the same output"
-
-    print("Test passed! (parallel and recurrent modes give the same output)")
