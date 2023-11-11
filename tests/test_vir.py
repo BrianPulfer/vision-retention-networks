@@ -4,8 +4,8 @@ from vir import ViRModes, ViR
 
 def test_parallel_recurrent_same():
     """Tests that parallel and recurrent modes give the same output for ViR"""
-    x = torch.randn(16, 3, 224, 224).cuda(0)
-    model = ViR(depth=12, heads=3, embed_dim=192).eval().cuda(0)
+    x = torch.randn(16, 3, 224, 224).cuda()
+    model = ViR(depth=12, heads=3, embed_dim=192).eval().cuda()
 
     with torch.no_grad():
         model.set_compute_mode(ViRModes.PARALLEL)
