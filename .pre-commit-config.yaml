@@ -1,4 +1,12 @@
 repos:
+- repo: local
+  hooks:
+    - id: conda-env-export
+      name: conda-env-export
+      entry: bash scripts/export-conda.sh
+      language: system
+      pass_filenames: false
+
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.2.0
     hooks:
@@ -6,10 +14,12 @@ repos:
     -   id: end-of-file-fixer
     -   id: check-yaml
     -   id: check-added-large-files
+
 -   repo: https://github.com/psf/black
     rev: 23.3.0
     hooks:
     -   id: black
+
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.1.4
   hooks:
