@@ -1,0 +1,25 @@
+name: "Tests"
+run-name: 'Running tests with ${{ github.actor }} 🧪'
+on:
+    push:
+        branches:
+        - main
+    pull_request:
+        branches:
+        - main
+jobs:
+  clone-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set-up conda environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.11.5
+          environment-file: environment.yml
+          auto-update-conda: true
+
+      - name: PyTest
+        run: PYTHONPATH=src/ pytest tests/
