@@ -29,6 +29,6 @@ jobs:
 
       - name: Run pytest
         shell: bash -l {0}
-        run: conda run -n vir pytest tests/
+        run: pytest tests/
         env:
           PYTHONPATH: src/
