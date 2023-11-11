@@ -1,5 +1,5 @@
 name: "Tests"
-run-name: 'Running tests with ${{ github.actor }} 🧪'
+run-name: 'Tests 🧪'
 on:
     push:
         branches:
@@ -23,7 +23,11 @@ jobs:
           environment-file: environment.yml
           auto-update-conda: true
 
+      - name: Activate conda environment
+        run: conda activate vir
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: PyTest
-        run: |
-          source activate vir
-          PYTHONPATH=src/ pytest tests/
+        run: PYTHONPATH=src/ pytest tests/
