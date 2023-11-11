@@ -24,7 +24,7 @@ jobs:
           auto-update-conda: true
 
       - name: Activate Conda environment
-        run: source /usr/share/miniconda/etc/profile.d/conda.sh && conda activate myenv
+        run: source /usr/share/miniconda/etc/profile.d/conda.sh && conda activate vir
 
       - name: Install dependencies
         run: conda install --yes --file requirements.txt
