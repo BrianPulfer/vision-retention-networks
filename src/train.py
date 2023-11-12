@@ -177,7 +177,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_dir", help="Checkpoint directory", type=str, default="checkpoints"
     )
-    parser.add_argument("--epochs", help="Number of epochs", type=int, default=10)
+    parser.add_argument("--epochs", help="Number of epochs", type=int, default=40)
     parser.add_argument("--lr", help="Learning rate", type=float, default=1e-3)
     parser.add_argument("--batch_size", help="Batch size", type=int, default=64)
     parser.add_argument("--image_size", help="Image size", type=int, default=224)
