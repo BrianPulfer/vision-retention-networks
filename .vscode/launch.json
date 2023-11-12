@@ -13,7 +13,7 @@
             "name": "Train ViR",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/src/main.py",
+            "program": "${workspaceFolder}/src/train.py",
             "console": "integratedTerminal",
             "args": [
                 "--seed", "0"

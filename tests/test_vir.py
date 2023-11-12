@@ -15,6 +15,14 @@ def test_parallel_recurrent_same():
         model.set_compute_mode(ViRModes.RECURRENT)
         y2 = model(x)
 
+        model.set_compute_mode(ViRModes.CHUNKWISE)
+        chunk_size = 20
+        y3 = model(x, chunk_size=chunk_size)
+
         assert torch.allclose(
             y1, y2, atol=1e-6
         ), "Parallel and recurrent modes should give the same output"
+
+        assert torch.allclose(
+            y1, y3, atol=1e-6
+        ), "Parallel and chunkwise modes should give the same output"
