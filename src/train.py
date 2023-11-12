@@ -50,22 +50,40 @@ class ViRLightningModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch["image"], batch["label"]
         y_hat = self(x)
+        acc = (y_hat.argmax(dim=1) == y).float().mean()
         loss = torch.nn.functional.cross_entropy(y_hat, y)
-        self.log("train_loss", loss)
+        self.log_dict(
+            {
+                "train_loss": loss,
+                "train_acc": acc,
+            }
+        )
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch["image"], batch["label"]
         y_hat = self(x)
+        acc = (y_hat.argmax(dim=1) == y).float().mean()
         loss = torch.nn.functional.cross_entropy(y_hat, y)
-        self.log("validation_loss", loss)
+        self.log_dict(
+            {
+                "validation_loss": loss,
+                "validation_acc": acc,
+            }
+        )
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch["image"], batch["label"]
         y_hat = self(x)
+        acc = (y_hat.argmax(dim=1) == y).float().mean()
         loss = torch.nn.functional.cross_entropy(y_hat, y)
-        self.log("test_loss", loss)
+        self.log_dict(
+            {
+                "test_loss": loss,
+                "test_acc": acc,
+            }
+        )
         return loss
 
     def configure_optimizers(self):
@@ -159,9 +177,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_dir", help="Checkpoint directory", type=str, default="checkpoints"
     )
-    parser.add_argument("--epochs", help="Number of epochs", type=int, default=3)
+    parser.add_argument("--epochs", help="Number of epochs", type=int, default=40)
     parser.add_argument("--lr", help="Learning rate", type=float, default=1e-3)
-    parser.add_argument("--batch_size", help="Batch size", type=int, default=16)
+    parser.add_argument("--batch_size", help="Batch size", type=int, default=64)
     parser.add_argument("--image_size", help="Image size", type=int, default=224)
     parser.add_argument("--num_workers", help="Number of workers", type=int, default=4)
 
@@ -172,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--embed_dim", help="Embedding dimension", type=int, default=192
     )
-    parser.add_argument("--alpha", help="Alpha", type=float, default=1.0)
+    parser.add_argument("--alpha", help="Alpha", type=float, default=0.99)
     parser.add_argument("--dropout", help="Dropout", type=float, default=0.1)
 
     args = vars(parser.parse_args())
