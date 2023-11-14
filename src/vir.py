@@ -35,6 +35,17 @@ class Retention(nn.Module):
             ),
         )
         self.register_buffer("causal_mask", torch.ones(max_len, max_len).tril())
+        self.register_buffer(
+            "retention_mask_chunkwise",
+            torch.tensor(
+                [self.alpha ** (chunk_size - i - 1) for i in range(chunk_size)]
+            ),
+        )
+
+        self.register_buffer(
+            "cross_mask_chunkwise",
+            torch.tensor([self.alpha ** (i + 1) for i in range(chunk_size)]),
+        )
         self.qkv = nn.Linear(embed_dim, embed_dim * 3)
 
     def forward_parallel(self, x):
@@ -94,22 +105,11 @@ class Retention(nn.Module):
         inner_chunk = (q @ k.transpose(-1, -2) / self.dim_sqrt * M) @ v
 
         # Updating outputs with chunk-wise recurrent
-        retention_mask = (
-            torch.tensor(
-                [
-                    [self.alpha ** (chunk_size - i - 1) for _ in range(d)]
-                    for i in range(chunk_size)
-                ]
-            )
-            .repeat(bs, 1, 1)
-            .to(x.device)
+        retention_mask = self.retention_mask_chunkwise.repeat(bs, d, 1).transpose(
+            -1, -2
         )
-        cross_mask = (
-            torch.tensor(
-                [[self.alpha ** (i + 1) for _ in range(d)] for i in range(chunk_size)]
-            )
-            .repeat(bs, n_chunks, 1, 1)
-            .to(x.device)
+        cross_mask = self.cross_mask_chunkwise.repeat(bs, n_chunks, d, 1).transpose(
+            -1, -2
         )
 
         states = torch.zeros(bs, n_chunks, d, d).to(x.device)
