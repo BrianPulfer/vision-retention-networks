@@ -19,6 +19,14 @@
                 "--seed", "0"
             ],
             "justMyCode": true
+        },
+        {
+            "name": "Benchmark",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/benchmark.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
         }
     ]
 }

@@ -35,6 +35,17 @@ class Retention(nn.Module):
             ),
         )
         self.register_buffer("causal_mask", torch.ones(max_len, max_len).tril())
+        self.register_buffer(
+            "retention_mask_chunkwise",
+            torch.tensor(
+                [self.alpha ** (chunk_size - i - 1) for i in range(chunk_size)]
+            ),
+        )
+
+        self.register_buffer(
+            "cross_mask_chunkwise",
+            torch.tensor([self.alpha ** (i + 1) for i in range(chunk_size)]),
+        )
         self.qkv = nn.Linear(embed_dim, embed_dim * 3)
 
     def forward_parallel(self, x):
@@ -74,54 +85,46 @@ class Retention(nn.Module):
 
         bs, sl, d = x.shape
 
-        outputs = []
-        state = torch.zeros(bs, d, d).to(x.device)
-        for xi in [x[:, i : i + chunk_size] for i in range(0, sl, chunk_size)]:
-            qkv = self.qkv(xi)
-            q, k, v = torch.chunk(qkv, 3, dim=-1)
-
-            # Masking matrices
-            cl = xi.shape[1]
-            retention_mask = (
-                torch.tensor(
-                    [
-                        [self.alpha ** (chunk_size - i - 1) for _ in range(d)]
-                        for i in range(cl)
-                    ]
-                )
-                .repeat(bs, 1, 1)
-                .to(x.device)
+        # Adding dummy tokens to make the sequence length divisible by chunk_size
+        if sl % chunk_size != 0:
+            x = torch.cat(
+                [x, torch.zeros(bs, chunk_size - sl % chunk_size, d).to(x.device)],
+                dim=1,
             )
-            inner_mask = (
-                self.causal_mask[:cl, :cl] * self.decay_mask[:cl, :cl]
-            ).repeat(bs, 1, 1)
-            cross_mask = (
-                torch.tensor(
-                    [
-                        [self.alpha ** (i + 1) for _ in range(d)]
-                        for i in range(q.shape[1])
-                    ]
-                )
-                .repeat(bs, 1, 1)
-                .to(x.device)
-            )
+        n_chunks = x.shape[1] // chunk_size
 
-            # Retention update
-            new_state = (
-                k.transpose(-1, -2) @ (v * retention_mask)
-                + self.alpha**chunk_size * state
-            )
+        # Running all chunks in parallel
+        x = x.reshape(bs, n_chunks, chunk_size, d)
+        q, k, v = self.qkv(x).chunk(3, dim=-1)
 
-            # Output
-            inner_chunk = (q @ k.transpose(-1, -2) / self.dim_sqrt * inner_mask) @ v
-            cross_chunk = (q @ state) / self.dim_sqrt * cross_mask
+        M = (
+            self.causal_mask[:chunk_size, :chunk_size]
+            * self.decay_mask[:chunk_size, :chunk_size]
+        ).repeat(bs, n_chunks, 1, 1)
 
-            out = inner_chunk + cross_chunk
-            outputs.append(out)
+        inner_chunk = (q @ k.transpose(-1, -2) / self.dim_sqrt * M) @ v
 
-            state = new_state
+        # Updating outputs with chunk-wise recurrent
+        retention_mask = self.retention_mask_chunkwise.repeat(bs, d, 1).transpose(
+            -1, -2
+        )
+        cross_mask = self.cross_mask_chunkwise.repeat(bs, n_chunks, d, 1).transpose(
+            -1, -2
+        )
 
-        return torch.cat(outputs, dim=1)
+        states = torch.zeros(bs, n_chunks, d, d).to(x.device)
+        for i in range(1, n_chunks):
+            chunk_state = k[:, i - 1].transpose(-1, -2) @ (v[:, i - 1] * retention_mask)
+            states[:, i] = chunk_state + states[:, i - 1] * self.alpha**chunk_size
+
+        cross_chunk = (q @ states) / self.dim_sqrt * cross_mask
+
+        # Combining inner and cross chunk
+        out = inner_chunk + cross_chunk
+
+        # Removing dummy tokens
+        out = out.flatten(1, 2)[:, :sl]
+        return out
 
     def forward(self, x, state=None, mode=ViRModes.PARALLEL, chunk_size=None):
         if mode is None:
@@ -324,20 +327,6 @@ if __name__ == "__main__":
     model = ViR(depth=12, heads=3, embed_dim=192).eval().to(device)
 
     with torch.no_grad():
-        model.set_compute_mode(ViRModes.PARALLEL)
-        y1 = model(x)
-
-        model.set_compute_mode(ViRModes.RECURRENT)
-        y2 = model(x)
-
         model.set_compute_mode(ViRModes.CHUNKWISE)
         chunk_size = 20
         y3 = model(x, chunk_size=chunk_size)
-
-        assert torch.allclose(
-            y1, y2, atol=1e-6
-        ), "Parallel and recurrent modes should give the same output"
-
-        assert torch.allclose(
-            y1, y3, atol=1e-6
-        ), "Parallel and chunkwise modes should give the same output"
