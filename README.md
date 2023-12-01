@@ -4,7 +4,7 @@ Unofficial re-implementation of [*ViR: Vision Retention Networks*](https://arxiv
 
 ## Usage
 ```python
-from vir import ViRm, ViRModes
+from vir import ViR, ViRModes
 
 model = ViR(
   out_dim=10,
