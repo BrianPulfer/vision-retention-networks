@@ -163,7 +163,7 @@ class MultiHeadRetention(nn.Module):
 
         self.heads = nn.ModuleList(
             [
-                Retention(embed_dim // heads, max_len, alpha, chunk_size)
+                Retention(embed_dim // heads, max_len, alpha, mode, chunk_size)
                 for _ in range(heads)
             ]
         )
