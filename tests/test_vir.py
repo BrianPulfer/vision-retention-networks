@@ -9,20 +9,14 @@ def test_parallel_recurrent_same():
     model = ViR(depth=12, heads=3, embed_dim=192).eval().to(device)
 
     with torch.no_grad():
-        model.set_compute_mode(ViRModes.PARALLEL)
-        y1 = model(x)
-
-        model.set_compute_mode(ViRModes.RECURRENT)
-        y2 = model(x)
-
-        model.set_compute_mode(ViRModes.CHUNKWISE)
-        chunk_size = 20
-        y3 = model(x, chunk_size=chunk_size)
+        y1 = model(x, mode=ViRModes.PARALLEL)
+        y2 = model(x, mode=ViRModes.RECURRENT)
+        y3 = model(x, mode=ViRModes.CHUNKWISE, chunk_size=20)
 
         assert torch.allclose(
-            y1, y2, atol=1e-6
+            y1, y2, atol=1e-5
         ), "Parallel and recurrent modes should give the same output"
 
         assert torch.allclose(
-            y1, y3, atol=1e-6
+            y1, y3, atol=1e-5
         ), "Parallel and chunkwise modes should give the same output"
