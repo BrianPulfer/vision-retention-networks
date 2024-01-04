@@ -15,6 +15,12 @@ from torchvision.transforms import (
 
 from vir import ViR, ViRModes
 
+NAME_TO_MODE = {
+    "parallel": ViRModes.PARALLEL,
+    "chunkwise": ViRModes.CHUNKWISE,
+    "recurrent": ViRModes.RECURRENT,
+}
+
 
 class ViRLightningModule(pl.LightningModule):
     def __init__(
@@ -26,26 +32,29 @@ class ViRLightningModule(pl.LightningModule):
         heads=12,
         embed_dim=768,
         max_len=257,
-        alpha=1.0,
+        alphas=None,
         mode=ViRModes.PARALLEL,
+        chunk_size=20,
         dropout=0.1,
     ):
         super(ViRLightningModule, self).__init__()
         self.lr = lr
         self.model = ViR(
-            out_dim,
             patch_size,
             depth,
             heads,
             embed_dim,
             max_len,
-            alpha,
+            alphas,
             mode,
+            chunk_size,
             dropout,
         )
+        self.head = torch.nn.Linear(embed_dim, out_dim)
 
     def forward(self, x):
-        return self.model(x)
+        h = self.model(x)
+        return self.head(h[:, -1])
 
     def training_step(self, batch, batch_idx):
         x, y = batch["image"], batch["label"]
@@ -139,8 +148,9 @@ def main(args):
         heads=args["heads"],
         embed_dim=args["embed_dim"],
         max_len=(args["image_size"] // args["patch_size"]) ** 2 + 1,
-        alpha=args["alpha"],
-        mode=ViRModes.PARALLEL,
+        alphas=None,
+        mode=NAME_TO_MODE[args["mode"]],
+        chunk_size=args["chunk_size"],
         dropout=args["dropout"],
     )
 
@@ -184,13 +194,16 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", help="Number of workers", type=int, default=4)
 
     # Model arguments
+    parser.add_argument(
+        "--mode", help="Mode", choices=list(NAME_TO_MODE.keys()), default="parallel"
+    )
     parser.add_argument("--patch_size", help="Patch size", type=int, default=14)
+    parser.add_argument("--chunk_size", help="Chunk size", type=int, default=20)
     parser.add_argument("--depth", help="Depth", type=int, default=12)
     parser.add_argument("--heads", help="Heads", type=int, default=3)
     parser.add_argument(
         "--embed_dim", help="Embedding dimension", type=int, default=192
     )
-    parser.add_argument("--alpha", help="Alpha", type=float, default=0.99)
     parser.add_argument("--dropout", help="Dropout", type=float, default=0.1)
 
     args = vars(parser.parse_args())
